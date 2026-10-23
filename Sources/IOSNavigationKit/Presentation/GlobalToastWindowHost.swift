@@ -146,7 +146,6 @@ private struct GlobalToastOverlay<Kind: Sendable>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .coordinateSpace(name: "toast-window")
         .onPreferenceChange(ToastInteractiveFramePreferenceKey.self, perform: onInteractiveFrameChange)
-        .ignoresSafeArea()
     }
 }
 
