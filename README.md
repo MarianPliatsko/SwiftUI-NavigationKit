@@ -4,7 +4,7 @@ A dependency-free, feature-typed navigation package for SwiftUI applications. Re
 
 ## Install from GitHub
 
-In Xcode, choose **File → Add Package Dependencies…**, enter `https://github.com/MarianPliatsko/IOSNavigationKit`, select the `main` branch, and add the `IOSNavigationKit` product. This repository is private, so collaborators must have GitHub access and authenticate Git operations through Xcode. For reproducible production dependencies, use a version tag when one is published.
+In Xcode, choose **File → Add Package Dependencies…**, enter `https://github.com/MarianPliatsko/IOSNavigationKit`, select the `main` branch, and add the `IOSNavigationKit` product. After new commits are pushed to `main`, choose **File → Packages → Update to Latest Package Versions** to resolve the branch to its latest commit; Xcode does not refresh a resolved revision automatically. This repository is private, so collaborators must have GitHub access and authenticate Git operations through Xcode. For reproducible production dependencies, use a version tag when one is published.
 
 For local development, add this directory as a local Swift package and link the `IOSNavigationKit` product.
 
@@ -88,7 +88,7 @@ struct MyApp: App {
 }
 ```
 
-`ToastMessage<Kind>` contains a message, the app-defined `kind`, optional duration in seconds, and `bottomPadding` in points (default `50`). `Kind` must conform to `Sendable`; it need not be `Hashable` or `Equatable`. For example, `toastStore.showToast(.init("Saved", kind: .success, bottomPadding: 88))` places the Toast 88 points above the scene's bottom edge. The renderer receives the same typed `ToastMessage<AppToastKind>`, so switching over `toast.kind` is exhaustive. `AlertRequest` remains independent and contains a title, optional message, and unrestricted array of actions (title, optional SwiftUI `ButtonRole`, main-actor handler). Toast kinds carry semantic meaning only; the library does not prescribe colors, fonts, assets, or view content.
+`ToastMessage<Kind>` contains a message, the app-defined `kind`, and an optional duration in seconds. `Kind` must conform to `Sendable`; it need not be `Hashable` or `Equatable`. The renderer receives the same typed `ToastMessage<AppToastKind>`, so switching over `toast.kind` is exhaustive. The library does not impose Toast width or padding; set horizontal and bottom padding in your app-owned Toast view. `AlertRequest` remains independent and contains a title, optional message, and unrestricted array of actions (title, optional SwiftUI `ButtonRole`, main-actor handler). Toast kinds carry semantic meaning only; the library does not prescribe colors, fonts, assets, or view content.
 
 Both root builders must be supplied; return `EmptyView()` to intentionally omit a visual component. There is no default design. Builders receive the current request and may return any SwiftUI view. The alert view inherits the presentation context; the Toast view receives its typed `ToastStore<Kind>` in the environment.
 
@@ -152,6 +152,9 @@ struct CustomToastView: View {
                 Text(toast.message)
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 88)
     }
 }
 ```

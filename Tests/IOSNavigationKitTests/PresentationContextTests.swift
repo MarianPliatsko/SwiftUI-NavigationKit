@@ -41,9 +41,11 @@ struct PresentationContextTests {
         #expect(context.alert?.id == alert.id)
     }
 
-    @Test func toastMessageStoresConfigurableBottomPadding() {
-        #expect(ToastMessage<TestToastKind>("Default", kind: .success).bottomPadding == 50)
-        #expect(ToastMessage<TestToastKind>("Custom", kind: .failure, bottomPadding: 96).bottomPadding == 96)
+    @Test func toastMessageStoresAppDefinedKindAndDuration() {
+        let toast = ToastMessage<TestToastKind>("Saved", kind: .success, duration: 4)
+        #expect(toast.message == "Saved")
+        #expect(toast.duration == 4)
+        #expect(ToastMessage<TestToastKind>("Persistent", kind: .failure, duration: nil).duration == nil)
         let typedToast = ToastMessage<TestToastKind>("Typed", kind: .failure)
         #expect(typedToast.message == "Typed")
     }

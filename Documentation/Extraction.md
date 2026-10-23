@@ -8,7 +8,7 @@ The standalone demo and its application UI-test target live in a sibling workspa
 
 ## Scene-level shared Toast window — 2026-10-22
 
-Shared app-level Toast now renders in a transparent pass-through `UIWindow` associated with the containing `UIWindowScene`. This keeps the same view continuously above nested navigation stacks and native modal presentations, without handing it between parent/child hosts. The window is above app content but below system alerts; hit testing passes through outside the measured toast content bounds. Toast content is bottom-aligned, with configurable `ToastMessage<Kind>.bottomPadding` (50 points by default). Custom shared alerts continue to render on the deepest active library-managed navigation/modal surface. Legacy router-local presentations are unchanged.
+Shared app-level Toast now renders in a transparent pass-through `UIWindow` associated with the containing `UIWindowScene`. This keeps the same view continuously above nested navigation stacks and native modal presentations, without handing it between parent/child hosts. The window is above app content but below system alerts; hit testing passes through outside the measured toast content bounds. The library does not impose width or padding; each app controls Toast layout in its renderer. Custom shared alerts continue to render on the deepest active library-managed navigation/modal surface. Legacy router-local presentations are unchanged.
 
 ## App-defined typed Toast kinds
 

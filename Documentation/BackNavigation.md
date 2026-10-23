@@ -68,7 +68,7 @@ Generated logs and results are under the package's ignored `.build/` directory:
 
 ## Follow-up shared Toast window validation
 
-On 2026-10-22, the scene-level pass-through Toast window was verified on iPhone 17 Pro / iOS 26.2. The Toast stayed above a presented full-screen cover, remained visible after dismissal, accepted taps within its bounds, and passed touches outside its bounds through to the app. Bottom placement and configurable `bottomPadding` were included in the follow-up UI regression. The current package suite passes 25 tests.
+On 2026-10-22, the scene-level pass-through Toast window was verified on iPhone 17 Pro / iOS 26.2. The Toast stayed above a presented full-screen cover, remained visible after dismissal, accepted taps within its bounds, and passed touches outside its bounds through to the app. The follow-up UI regression verified app-controlled bottom placement and hit testing. The current package suite passes 25 tests.
 - `back-navigation-ios26.log` / `.xcresult` and `back-navigation-ios27.log` / `.xcresult` record the canonical demo UI runs.
 - `back-navigation-simulator-build.log` records the generic Simulator build.
 

@@ -129,9 +129,6 @@ private struct GlobalToastOverlay<Kind: Sendable>: View {
                 toastContent(toast)
                     .environment(toastStore)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 540)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, toast.bottomPadding)
                     .background {
                         GeometryReader { toastGeometry in
                             Color.clear.preference(
