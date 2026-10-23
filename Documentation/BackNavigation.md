@@ -34,7 +34,7 @@ SwiftUI's [`.subviews` mask](https://developer.apple.com/documentation/swiftui/g
 
 ## Regression tests
 
-The canonical app now has an `IOSNavigationKitDemoUITests` target, included in its shared scheme. `Demo/IOSNavigationKitDemo/UITests/NavigationUITests.swift` tests:
+The companion app and its `IOSNavigationKitDemoUITests` target live in a separate sibling folder in the local workspace, outside this package repository. The UI tests cover:
 
 - Eight push/native-Back cycles, alternating with a persistent custom toast. Each cycle taps Back exactly once.
 - Programmatic pop and pop to root, including subsequent pushes and path-depth checks.
@@ -42,7 +42,7 @@ The canonical app now has an `IOSNavigationKitDemoUITests` target, included in i
 - Canceled interactive Back followed by one native Back tap, checking path depth.
 - Independent tab histories and a nested workspace's Back navigation and contextual close.
 
-These are application UI tests, outside all package targets. In Xcode, select the canonical demo scheme and Simulator, then press **⌘U**. Run against iOS 26.2 when available to exercise the OS version on which the original failure was reproduced. Expectation timeouts wait for UI observations; no production timing workaround is introduced.
+These are application UI tests, outside all package targets and not distributed with this package. Open the companion demo project in Xcode, select its demo scheme and Simulator, then press **⌘U**. Run against iOS 26.2 when available to exercise the OS version on which the original failure was reproduced. Expectation timeouts wait for UI observations; no production timing workaround is introduced.
 
 At the time of this investigation, the root shared-presentation overlay could be obscured by native sheets/covers. The later scene-level Toast window implementation is documented in `Extraction.md`. Real-device touch behavior and accessibility remain useful additional smoke checks.
 
@@ -59,7 +59,7 @@ Using Xcode 27.0 / Apple Swift 6.4 on 2026-10-22:
 | Canonical demo generic iOS Simulator SDK build, `ONLY_ACTIVE_ARCH=NO` | Passed for arm64 and x86_64 |
 | Source checksum comparison | Only the compatibility toast modifier changed in the library; manifest, Router, and NavigationContainer unchanged |
 | Direct `Router.dismiss()` comparison with Novele | Exact body match |
-| Workspace Xcode project audit | Only `Demo/IOSNavigationKitDemo/IOSNavigationKitDemo.xcodeproj` remains active under the package |
+| Workspace Xcode project audit | The demo Xcode project is outside the package repository, in `../IOSNavigationKitDemo` |
 
 Generated logs and results are under the package's ignored `.build/` directory:
 

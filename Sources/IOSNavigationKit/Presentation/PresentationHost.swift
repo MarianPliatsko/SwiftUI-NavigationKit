@@ -4,7 +4,6 @@ import SwiftUI
 // Type erasure is confined to the environment bridge: modal containers do not know
 // the application's concrete presentation view types.
 struct PresentationRenderers {
-    let toast: @MainActor (ToastMessage) -> AnyView
     let alert: @MainActor (AlertRequest) -> AnyView
 }
 

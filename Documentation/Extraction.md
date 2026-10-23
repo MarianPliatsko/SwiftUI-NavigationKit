@@ -4,11 +4,15 @@
 
 The earlier extraction/additive implementation notes below describe their original state. Subsequent controlled Simulator UI tests isolated an iOS 26.2 native Back failure to the compatibility toast modifier's always-active whole-stack drag recognizer. `NavigationToastModifier` now disables only the added gesture while its toast is nil, using `.subviews` to preserve descendant gestures. Its existing `.all` behavior remains while a legacy toast is present. Router and NavigationContainer source, dismissal semantics, and navigation/modal ownership are unchanged. See [BackNavigation.md](BackNavigation.md) for reproduction and tests.
 
-The canonical demo is `Demo/IOSNavigationKitDemo/IOSNavigationKitDemo.xcodeproj`; it now contains an application UI-test target. The old parent-workspace demo and copied navigation sources/tests were retired into a byte-verified ZIP archive in that workspace's `Archive/` directory. No reference project or Knowledge Base files were changed.
+The standalone demo and its application UI-test target live in a sibling workspace folder outside this package repository. The demo links this package through a local Swift package reference. No reference project or Knowledge Base files were changed.
 
 ## Scene-level shared Toast window — 2026-10-22
 
-Shared app-level Toast now renders in a transparent pass-through `UIWindow` associated with the containing `UIWindowScene`. This keeps the same view continuously above nested navigation stacks and native modal presentations, without handing it between parent/child hosts. The window is above app content but below system alerts; hit testing passes through outside the measured toast content bounds. Toast content is bottom-aligned, with configurable `ToastMessage.bottomPadding` (50 points by default). Custom shared alerts continue to render on the deepest active library-managed navigation/modal surface. Legacy router-local presentations are unchanged.
+Shared app-level Toast now renders in a transparent pass-through `UIWindow` associated with the containing `UIWindowScene`. This keeps the same view continuously above nested navigation stacks and native modal presentations, without handing it between parent/child hosts. The window is above app content but below system alerts; hit testing passes through outside the measured toast content bounds. Toast content is bottom-aligned, with configurable `ToastMessage<Kind>.bottomPadding` (50 points by default). Custom shared alerts continue to render on the deepest active library-managed navigation/modal surface. Legacy router-local presentations are unchanged.
+
+## App-defined typed Toast kinds
+
+Shared Toast state is now held by `ToastStore<Kind: Sendable>`, separate from the alert-only `PresentationContext`. Apps define the semantic `Kind` enum and map it to app-owned assets/styles in the renderer. `ToastMessage<Kind>` carries that type through screen call sites, environment access, and rendering, enabling exhaustive compile-time switches without constraining kind cases to library-defined values. The root modifier takes `toastKind: Kind.Type` to establish the generic type. Alerts and router-local Toast APIs are unchanged.
 
 ## Additive app-level presentations — 2026-10-21
 

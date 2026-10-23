@@ -10,11 +10,9 @@ For local development, add this directory as a local Swift package and link the 
 
 ## Demo App
 
-This is the only maintained demo application. The older parent-workspace demo has been retired and archived.
+The standalone demo app is kept outside this package repository, in the adjacent workspace folder `IOSNavigationKitDemo`. It links this package as a local dependency and includes UI regression tests. Demo sources and the Xcode project are not included in the library repository or Swift package.
 
-The demo scheme includes UI regression tests for native Back, programmatic pop, and interactive Back navigation. Select a Simulator and press **⌘U**. See the [Back navigation investigation](Documentation/BackNavigation.md) for the iOS 26.2 failure reproduction and the minimal compatibility-toast gesture fix.
-
-Open [`Demo/IOSNavigationKitDemo/IOSNavigationKitDemo.xcodeproj`](Demo/IOSNavigationKitDemo/IOSNavigationKitDemo.xcodeproj), select **IOSNavigationKitDemo** and an iOS Simulator, then press **⌘R**. This standalone SwiftUI app links the repository root as a local package and demonstrates app-owned toast/alert views, replacement alerts, independent tab routers, nested coordinators, push/pop, sheets, full-screen covers, and interactive sheet dismissal. Demo sources are outside the library target. See the [launch instructions and walkthrough](Demo/IOSNavigationKitDemo/README.md).
+The iOS 26.2 Back-navigation regression investigation and validation notes are in [BackNavigation.md](Documentation/BackNavigation.md).
 
 ## Minimal usage
 
@@ -67,15 +65,20 @@ Use `Never` for unused channels. For example, `Router<Push, Never, Never>` needs
 
 ## App-level presentations
 
-Configure application-owned views once above the coordinator tree:
+Define semantic toast kinds in the app. The generic kind flows through the toast model, store, and renderer, so the app's switch remains exhaustively checked at compile time:
 
 ```swift
+enum AppToastKind: Sendable {
+    case success
+    case failure
+}
+
 @main
 struct MyApp: App {
     var body: some Scene {
         WindowGroup {
             AppCoordinator()
-                .navigationPresentations { toast in
+                .navigationPresentations(toastKind: AppToastKind.self) { toast in
                     CustomToastView(toast: toast)
                 } alert: { alert in
                     CustomAlertView(alert: alert)
@@ -85,9 +88,9 @@ struct MyApp: App {
 }
 ```
 
-`ToastMessage` contains a message, optional duration in seconds, and `bottomPadding` in points (default `50`). For example, `presentation.showToast(.init("Saved", bottomPadding: 88))` places the Toast 88 points above the scene's bottom edge. `AlertRequest` contains a title, optional message, and unrestricted array of actions (title, optional SwiftUI `ButtonRole`, main-actor handler). Neither model contains colors, fonts, assets, or view content. Add application-specific factories in your application if needed.
+`ToastMessage<Kind>` contains a message, the app-defined `kind`, optional duration in seconds, and `bottomPadding` in points (default `50`). `Kind` must conform to `Sendable`; it need not be `Hashable` or `Equatable`. For example, `toastStore.showToast(.init("Saved", kind: .success, bottomPadding: 88))` places the Toast 88 points above the scene's bottom edge. The renderer receives the same typed `ToastMessage<AppToastKind>`, so switching over `toast.kind` is exhaustive. `AlertRequest` remains independent and contains a title, optional message, and unrestricted array of actions (title, optional SwiftUI `ButtonRole`, main-actor handler). Toast kinds carry semantic meaning only; the library does not prescribe colors, fonts, assets, or view content.
 
-Both root builders must be supplied; return `EmptyView()` to intentionally omit a visual component. There is no default design. Builders receive the current request and may return any SwiftUI view. Their views inherit the same presentation context.
+Both root builders must be supplied; return `EmptyView()` to intentionally omit a visual component. There is no default design. Builders receive the current request and may return any SwiftUI view. The alert view inherits the presentation context; the Toast view receives its typed `ToastStore<Kind>` in the environment.
 
 A nested coordinator retains its independent router and installs no additional host:
 
@@ -108,11 +111,12 @@ struct ProfileCoordinator: View {
 
 struct ProfileScreen: View {
     @Environment(\.presentationContext) private var presentation
+    @Environment(ToastStore<AppToastKind>.self) private var toastStore
 
     var body: some View {
         VStack {
             Button("Save") {
-                presentation.showToast(.init("Profile updated"))
+                toastStore.showToast(.init("Profile updated", kind: .success))
             }
             Button("Delete") {
                 presentation.showAlert(.init(
@@ -125,6 +129,27 @@ struct ProfileScreen: View {
                         .init(title: "Cancel", role: .cancel)
                     ]
                 ))
+            }
+        }
+    }
+}
+
+struct CustomToastView: View {
+    let toast: ToastMessage<AppToastKind>
+    @Environment(ToastStore<AppToastKind>.self) private var toastStore
+
+    var body: some View {
+        Button {
+            toastStore.dismissToast(id: toast.id)
+        } label: {
+            HStack {
+                switch toast.kind {
+                case .success:
+                    Image("ToastSuccess")
+                case .failure:
+                    Image("ToastFailure")
+                }
+                Text(toast.message)
             }
         }
     }
@@ -154,19 +179,19 @@ struct CustomAlertView: View {
 }
 ```
 
-Calling an action's `handler` directly bypasses the context's lifecycle safeguards. A custom toast can dismiss itself with `presentation.dismissToast(id: toast.id)`. The complete, compiled [example](Examples/AppLevelPresentations.swift) includes application-owned toast and alert designs and two nested coordinators. The example target is built alongside the library; add `@main` when adopting its app in a standalone application target.
+Calling an action's `handler` directly bypasses the context's lifecycle safeguards. A custom Toast can dismiss itself with `toastStore.dismissToast(id: toast.id)`. The complete, compiled [example](Examples/AppLevelPresentations.swift) includes application-owned toast and alert designs and two nested coordinators. The example target is built alongside the library; add `@main` when adopting its app in a standalone application target.
 
 ### Ownership and lifecycle
 
 - The modifier owns a stable context for its SwiftUI identity. Descendants, pushed destinations, nested coordinators, and independent routers beneath it share that context through the environment. Context access without an ancestor host fails with a diagnostic; it never allocates a hidden fallback or global singleton.
-- Nested modifier installations reuse the ancestor context and omit their own host. The outermost builders take precedence. Separate sibling/window roots have separate scopes. Installing a new nested scope under an existing host is not supported in this version.
+- Nested modifier installations reuse the ancestor context and typed Toast store and omit their own host. The outermost builders take precedence; nested modifiers must use the same `Kind` as their ancestor. Separate sibling/window roots have separate scopes. Installing a new nested scope under an existing host is not supported in this version.
 - Toast and alert slots are independent. Showing a request replaces only its own slot, with no queue, cross-slot dismissal, or router/modal arbitration. The application-owned Toast view renders in a scene-level pass-through window; custom alerts render on the active navigation/modal surface.
-- Each toast show restarts timing, including reshowing the same value. Finite positive durations start at `showToast`, regardless of host visibility. Nil, nonpositive, and nonfinite durations persist. Replacement and explicit dismissal cancel the timer; stale completions cannot dismiss a replacement. A timer does not keep its context alive. Host disappearance alone does not clear retained state or pause timing; context lifetime follows the modifier's retained SwiftUI identity.
+- Each toast show restarts timing, including reshowing the same value. Finite positive durations start at `showToast`, regardless of host visibility. Nil, nonpositive, and nonfinite durations persist. Replacement and explicit dismissal cancel the timer; stale completions cannot dismiss a replacement. A timer does not keep its store alive. Host disappearance alone does not clear retained state or pause timing; store lifetime follows the modifier's retained SwiftUI identity.
 - Alert actions run synchronously on the main actor while the original request is current, then dismiss only that request by identity. A new alert shown by the action survives. Stale actions and actions belonging to a different request are ignored. Repeated taps after dismissal are ignored. Explicit alert dismissal runs no action. There is no implicit action or automatic dismissal for an alert with zero actions; the application supplies a close control.
-- `dismissToast()` and `dismissAlert()` clear their respective current slots. Supplying `id:` makes dismissal conditional on that request still being current. New request values have distinct UUID identities; presenting the same alert value again retains its identity.
+- `ToastStore<Kind>.dismissToast()` and `PresentationContext.dismissAlert()` clear their respective current slots. Supplying `id:` makes dismissal conditional on that request still being current. New request values have distinct UUID identities; presenting the same alert value again retains its identity.
 - Applications own toast styling, animations, focus management, VoiceOver behavior, and accessibility. The shared Toast host positions content near the bottom of the scene and uses the rendered content bounds for hit testing; touches elsewhere pass through to the app.
 
-**Toast window:** on iOS, each outermost `.navigationPresentations` scope installs one transparent `UIWindow` in its containing scene, above app navigation windows and below system alerts. Shared Toasts render there continuously, including above nested navigation stacks, sheets, and full-screen covers; they do not hand off between presenters. The window passes touches through outside the toast's measured bounds. The shared context and toast timer are unchanged; the window is removed with its hosting view.
+**Toast window:** on iOS, each outermost `.navigationPresentations` scope installs one transparent `UIWindow` in its containing scene, above app navigation windows and below system alerts. Shared Toasts render there continuously, including above nested navigation stacks, sheets, and full-screen covers; they do not hand off between presenters. The window passes touches through outside the toast's measured bounds. The typed Toast store and timer are unchanged; the window is removed with its hosting view.
 
 **Alert and scene boundary:** custom shared alerts remain hosted on the deepest active `NavigationContainer` surface. Toast windows are scoped to the containing `UIWindowScene`; native content in that scene is covered, while windows in another scene have their own presentation scope. This implementation does not alter modal ownership or presentation policy.
 
@@ -174,7 +199,7 @@ Calling an action's `handler` directly bypasses the context's lifecycle safeguar
 
 All existing `Router` APIs, `Routable`, `ToastData`, `AlertPresentation`, and the local renderers remain available with their prior behavior. Their source lives under `Compatibility/`; source relocation does not change module imports. The shared presentation hosts do not bridge, suppress, or redirect legacy router state.
 
-Migrate individual toast/alert call sites to `presentation.showToast` / `showAlert` and provide app-owned designs at the root. Shared state is separate from router state: `Router.dismiss()` and `dismissAllPresentations()` affect only their existing local slots. Use the context's explicit dismissal APIs for shared presentations. Mixing shared and legacy requests may render both; no conflict policy is introduced.
+Migrate individual toast/alert call sites to `toastStore.showToast` / `presentation.showAlert` and provide app-owned designs at the root. Shared state is separate from router state: `Router.dismiss()` and `dismissAllPresentations()` affect only their existing local slots. Use `ToastStore<Kind>` and `PresentationContext` dismissal APIs for their respective shared presentations. Mixing shared and legacy requests may render both; no conflict policy is introduced.
 
 The legacy `AlertPresentation` still retains only three actions and its native renderer still clears synchronously replaced alerts after invoking a handler. The new `AlertRequest` / `PresentationContext.perform` path supports unrestricted actions and preserves replacement alerts. Legacy toast appearance, equality, timing, and gesture dismissal remain unchanged.
 

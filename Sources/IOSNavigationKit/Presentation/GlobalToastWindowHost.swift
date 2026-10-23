@@ -3,35 +3,35 @@ import SwiftUI
 import UIKit
 
 @MainActor
-struct GlobalToastWindowHost: UIViewControllerRepresentable {
-    let context: PresentationContext
-    let toastContent: @MainActor (ToastMessage) -> AnyView
+struct GlobalToastWindowHost<Kind: Sendable>: UIViewControllerRepresentable {
+    let toastStore: ToastStore<Kind>
+    let toastContent: @MainActor (ToastMessage<Kind>) -> AnyView
 
-    func makeUIViewController(context: Context) -> GlobalToastWindowController {
-        GlobalToastWindowController(presentationContext: self.context, toastContent: toastContent)
+    func makeUIViewController(context: Context) -> GlobalToastWindowController<Kind> {
+        GlobalToastWindowController(toastStore: toastStore, toastContent: toastContent)
     }
 
-    func updateUIViewController(_ controller: GlobalToastWindowController, context: Context) {
-        controller.update(presentationContext: self.context, toastContent: toastContent)
+    func updateUIViewController(_ controller: GlobalToastWindowController<Kind>, context: Context) {
+        controller.update(toastStore: toastStore, toastContent: toastContent)
     }
 
-    static func dismantleUIViewController(_ controller: GlobalToastWindowController, coordinator: ()) {
+    static func dismantleUIViewController(_ controller: GlobalToastWindowController<Kind>, coordinator: ()) {
         controller.removeToastWindow()
     }
 }
 
 @MainActor
-final class GlobalToastWindowController: UIViewController {
-    private var presentationContext: PresentationContext
-    private var toastContent: @MainActor (ToastMessage) -> AnyView
+final class GlobalToastWindowController<Kind: Sendable>: UIViewController {
+    private var toastStore: ToastStore<Kind>
+    private var toastContent: @MainActor (ToastMessage<Kind>) -> AnyView
     private var toastWindow: PassthroughToastWindow?
-    private var hostingController: UIHostingController<GlobalToastOverlay>?
+    private var hostingController: UIHostingController<GlobalToastOverlay<Kind>>?
 
     init(
-        presentationContext: PresentationContext,
-        toastContent: @escaping @MainActor (ToastMessage) -> AnyView
+        toastStore: ToastStore<Kind>,
+        toastContent: @escaping @MainActor (ToastMessage<Kind>) -> AnyView
     ) {
-        self.presentationContext = presentationContext
+        self.toastStore = toastStore
         self.toastContent = toastContent
         super.init(nibName: nil, bundle: nil)
     }
@@ -52,10 +52,10 @@ final class GlobalToastWindowController: UIViewController {
     }
 
     func update(
-        presentationContext: PresentationContext,
-        toastContent: @escaping @MainActor (ToastMessage) -> AnyView
+        toastStore: ToastStore<Kind>,
+        toastContent: @escaping @MainActor (ToastMessage<Kind>) -> AnyView
     ) {
-        self.presentationContext = presentationContext
+        self.toastStore = toastStore
         self.toastContent = toastContent
         updateRootView()
         configureWindowIfNeeded()
@@ -91,9 +91,9 @@ final class GlobalToastWindowController: UIViewController {
         hostingController?.rootView = makeRootView()
     }
 
-    private func makeRootView() -> GlobalToastOverlay {
+    private func makeRootView() -> GlobalToastOverlay<Kind> {
         GlobalToastOverlay(
-            context: presentationContext,
+            toastStore: toastStore,
             toastContent: toastContent
         ) { [weak self] frame in
             self?.toastWindow?.interactiveFrame = frame.isNull ? nil : frame
@@ -117,17 +117,17 @@ private final class PassthroughToastWindow: UIWindow {
 }
 
 @MainActor
-private struct GlobalToastOverlay: View {
-    @Bindable var context: PresentationContext
-    let toastContent: @MainActor (ToastMessage) -> AnyView
+private struct GlobalToastOverlay<Kind: Sendable>: View {
+    @Bindable var toastStore: ToastStore<Kind>
+    let toastContent: @MainActor (ToastMessage<Kind>) -> AnyView
     let onInteractiveFrameChange: @MainActor (CGRect) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
-            if let toast = context.toast {
+            if let toast = toastStore.toast {
                 toastContent(toast)
-                    .environment(\.installedPresentationContext, context)
+                    .environment(toastStore)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 540)
                     .padding(.horizontal, 20)

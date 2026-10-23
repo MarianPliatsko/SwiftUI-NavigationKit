@@ -20,50 +20,69 @@ extension View {
     /// NavigationContainer surface.
     /// Presentations created outside this scope are outside this hosting scope.
     @MainActor
-    public func navigationPresentations<ToastContent: View, AlertContent: View>(
-        @ViewBuilder toast: @escaping (ToastMessage) -> ToastContent,
+    public func navigationPresentations<Kind: Sendable, ToastContent: View, AlertContent: View>(
+        toastKind: Kind.Type,
+        @ViewBuilder toast: @escaping (ToastMessage<Kind>) -> ToastContent,
         @ViewBuilder alert: @escaping (AlertRequest) -> AlertContent
     ) -> some View {
-        modifier(NavigationPresentationsModifier(toastContent: toast, alertContent: alert))
+        modifier(NavigationPresentationsModifier(
+            toastKind: toastKind,
+            toastContent: toast,
+            alertContent: alert
+        ))
     }
 }
 
 @MainActor
-private struct NavigationPresentationsModifier<ToastContent: View, AlertContent: View>: ViewModifier {
+private struct NavigationPresentationsModifier<Kind: Sendable, ToastContent: View, AlertContent: View>: ViewModifier {
     @Environment(\.installedPresentationContext) private var inheritedContext
     @State private var context = PresentationContext()
+    @State private var toastStore: ToastStore<Kind>
     @State private var surfaces = PresentationSurfaces()
 
-    let toastContent: (ToastMessage) -> ToastContent
+    let toastContent: (ToastMessage<Kind>) -> ToastContent
     let alertContent: (AlertRequest) -> AlertContent
+
+    init(
+        toastKind: Kind.Type,
+        toastContent: @escaping (ToastMessage<Kind>) -> ToastContent,
+        alertContent: @escaping (AlertRequest) -> AlertContent
+    ) {
+        _toastStore = State(initialValue: ToastStore<Kind>())
+        self.toastContent = toastContent
+        self.alertContent = alertContent
+    }
 
     func body(content: Content) -> some View {
         if inheritedContext != nil {
             content
         } else {
             let renderers = PresentationRenderers(
-                toast: { AnyView(toastContent($0)) },
                 alert: { AnyView(alertContent($0)) }
             )
             content
                 .modifier(PresentationHostModifier())
-                .modifier(ToastWindowAttachment(context: context, toastContent: renderers.toast))
+                .modifier(ToastWindowAttachment(
+                    toastStore: toastStore,
+                    toastContent: { AnyView(toastContent($0)) }
+                ))
                 .environment(\.installedPresentationContext, context)
                 .environment(\.presentationSurfaces, surfaces)
                 .environment(\.presentationRenderers, renderers)
+                .environment(toastStore)
         }
     }
 }
 
 @MainActor
-private struct ToastWindowAttachment: ViewModifier {
-    let context: PresentationContext
-    let toastContent: @MainActor (ToastMessage) -> AnyView
+private struct ToastWindowAttachment<Kind: Sendable>: ViewModifier {
+    let toastStore: ToastStore<Kind>
+    let toastContent: @MainActor (ToastMessage<Kind>) -> AnyView
 
     func body(content: Content) -> some View {
 #if os(iOS)
         content.overlay(alignment: .topLeading) {
-            GlobalToastWindowHost(context: context, toastContent: toastContent)
+            GlobalToastWindowHost(toastStore: toastStore, toastContent: toastContent)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityHidden(true)
                 .allowsHitTesting(false)

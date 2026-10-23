@@ -1,13 +1,18 @@
 import IOSNavigationKit
 import SwiftUI
 
+private enum ExampleToastKind: Sendable {
+    case success
+    case failure
+}
+
 #if os(iOS)
 // Add @main when using this file in a standalone application target.
 struct ExampleApp: App {
     var body: some Scene {
         WindowGroup {
             AppCoordinator()
-                .navigationPresentations { toast in
+                .navigationPresentations(toastKind: ExampleToastKind.self) { toast in
                     CustomToastView(toast: toast)
                 } alert: { alert in
                     CustomAlertView(alert: alert)
@@ -47,11 +52,12 @@ private struct ProfileCoordinator: View {
 
 private struct ProfileScreen: View {
     @Environment(\.presentationContext) private var presentation
+    @Environment(ToastStore<ExampleToastKind>.self) private var toastStore
 
     var body: some View {
         VStack {
             Button("Save") {
-                presentation.showToast(.init("Profile updated"))
+                toastStore.showToast(.init("Profile updated", kind: .success))
             }
             Button("Delete") {
                 presentation.showAlert(.init(
@@ -76,13 +82,13 @@ private struct ProfileScreen: View {
 
 // All styling and interaction in these views belongs to the application.
 private struct CustomToastView: View {
-    let toast: ToastMessage
-    @Environment(\.presentationContext) private var presentation
+    let toast: ToastMessage<ExampleToastKind>
+    @Environment(ToastStore<ExampleToastKind>.self) private var toastStore
 
     var body: some View {
         VStack {
             Spacer()
-            Button { presentation.dismissToast(id: toast.id) } label: {
+            Button { toastStore.dismissToast(id: toast.id) } label: {
                 Text(toast.message)
                     .padding()
                     .background(.regularMaterial, in: .capsule)

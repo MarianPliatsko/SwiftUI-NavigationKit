@@ -2,6 +2,11 @@
 import SwiftUI
 import Testing
 
+private enum TestToastKind: Sendable {
+    case success
+    case failure
+}
+
 @MainActor
 private final class ManualSleeper {
     var durations: [TimeInterval] = []
@@ -21,23 +26,26 @@ struct PresentationContextTests {
     @Test func independentSlotsAndScopes() {
         let context = PresentationContext()
         let other = PresentationContext()
-        let toast = ToastMessage("Saved", duration: nil)
+        let toastStore = ToastStore<TestToastKind>()
+        let otherToastStore = ToastStore<TestToastKind>()
+        let toast = ToastMessage<TestToastKind>("Saved", kind: .success, duration: nil)
         let alert = AlertRequest(title: "Confirm")
-        context.showToast(toast)
+        toastStore.showToast(toast)
         context.showAlert(alert)
-        #expect(context.toast?.id == toast.id)
+        #expect(toastStore.toast?.id == toast.id)
         #expect(context.alert?.id == alert.id)
-        #expect(other.toast == nil && other.alert == nil)
+        #expect(otherToastStore.toast == nil && other.alert == nil)
         context.dismissAlert()
-        #expect(context.toast?.id == toast.id)
+        #expect(toastStore.toast?.id == toast.id)
         context.showAlert(alert)
-        context.dismissToast()
         #expect(context.alert?.id == alert.id)
     }
 
     @Test func toastMessageStoresConfigurableBottomPadding() {
-        #expect(ToastMessage("Default").bottomPadding == 50)
-        #expect(ToastMessage("Custom", bottomPadding: 96).bottomPadding == 96)
+        #expect(ToastMessage<TestToastKind>("Default", kind: .success).bottomPadding == 50)
+        #expect(ToastMessage<TestToastKind>("Custom", kind: .failure, bottomPadding: 96).bottomPadding == 96)
+        let typedToast = ToastMessage<TestToastKind>("Typed", kind: .failure)
+        #expect(typedToast.message == "Typed")
     }
 
     @Test func sharedPresentationsRemainIndependentOfLegacyRouter() {
@@ -46,30 +54,32 @@ struct PresentationContextTests {
         let legacy = AlertPresentation(title: "Legacy")
         router.present(legacy)
         router.present(toast: .init(content: "Legacy toast", background: .green))
+        let toastStore = ToastStore<TestToastKind>()
+        let sharedToast = ToastMessage<TestToastKind>("Shared toast", kind: .success, duration: nil)
         let shared = AlertRequest(title: "Shared")
         context.showAlert(shared)
-        context.showToast(.init("Shared toast", duration: nil))
+        toastStore.showToast(sharedToast)
         router.dismiss()
         #expect(router.alert == nil && router.toast != nil)
-        #expect(context.alert?.id == shared.id && context.toast != nil)
+        #expect(context.alert?.id == shared.id && toastStore.toast?.id == sharedToast.id)
         router.dismissAllPresentations()
-        #expect(context.alert?.id == shared.id && context.toast != nil)
+        #expect(context.alert?.id == shared.id && toastStore.toast?.id == sharedToast.id)
         router.present(legacy)
         context.dismissAlert()
-        context.dismissToast()
+        toastStore.dismissToast()
         #expect(router.alert?.id == legacy.id)
     }
 
     @Test func sharedToastSurvivesRouterModalDismissal() {
-        let context = PresentationContext()
+        let toastStore = ToastStore<TestToastKind>()
         let router = Router<Never, String, Never>()
-        let toast = ToastMessage("Saved", duration: nil)
+        let toast = ToastMessage<TestToastKind>("Saved", kind: .success, duration: nil)
 
-        context.showToast(toast)
+        toastStore.showToast(toast)
         router.presentSheet("modal")
         router.sheet = nil
 
-        #expect(context.toast?.id == toast.id)
+        #expect(toastStore.toast?.id == toast.id)
     }
 
     @Test func alertActionPreservesSynchronousReplacement() {
@@ -113,68 +123,68 @@ struct PresentationContextTests {
 
     @Test func timerExpiresAndReplacementCancelsStaleCompletion() async {
         let clock = ManualSleeper()
-        let context = PresentationContext(sleep: clock.sleep)
-        context.showToast(.init("First", duration: 2))
+        let toastStore = ToastStore<TestToastKind>(sleep: clock.sleep)
+        toastStore.showToast(.init("First", kind: .success, duration: 2))
         while clock.pending.count < 1 { await Task.yield() }
-        let replacement = ToastMessage("Second", duration: 7)
-        context.showToast(replacement)
+        let replacement = ToastMessage<TestToastKind>("Second", kind: .failure, duration: 7)
+        toastStore.showToast(replacement)
         while clock.pending.count < 2 { await Task.yield() }
         clock.finishFirst() // Deliberately ignores cancellation to exercise stale completion.
         await Task.yield()
-        #expect(context.toast?.id == replacement.id)
+        #expect(toastStore.toast?.id == replacement.id)
         clock.finishFirst()
-        while context.toast != nil { await Task.yield() }
+        while toastStore.toast != nil { await Task.yield() }
         #expect(clock.durations == [2, 7])
     }
 
     @Test func reshowingSameToastRestartsTimer() async {
         let clock = ManualSleeper()
-        let context = PresentationContext(sleep: clock.sleep)
-        let toast = ToastMessage("Same")
-        context.showToast(toast)
+        let toastStore = ToastStore<TestToastKind>(sleep: clock.sleep)
+        let toast = ToastMessage<TestToastKind>("Same", kind: .success)
+        toastStore.showToast(toast)
         while clock.pending.count < 1 { await Task.yield() }
-        context.showToast(toast)
+        toastStore.showToast(toast)
         while clock.pending.count < 2 { await Task.yield() }
         clock.finishFirst()
         await Task.yield()
-        #expect(context.toast?.id == toast.id)
+        #expect(toastStore.toast?.id == toast.id)
         clock.finishFirst()
-        while context.toast != nil { await Task.yield() }
+        while toastStore.toast != nil { await Task.yield() }
     }
 
     @Test func manualDismissalInvalidatesTimerAndStaleIDs() async {
         let clock = ManualSleeper()
-        let context = PresentationContext(sleep: clock.sleep)
-        let old = ToastMessage("Old")
-        context.showToast(old)
+        let toastStore = ToastStore<TestToastKind>(sleep: clock.sleep)
+        let old = ToastMessage<TestToastKind>("Old", kind: .success)
+        toastStore.showToast(old)
         while clock.pending.count < 1 { await Task.yield() }
-        context.dismissToast()
-        let replacement = ToastMessage("Persistent", duration: nil)
-        context.showToast(replacement)
-        context.dismissToast(id: old.id)
+        toastStore.dismissToast()
+        let replacement = ToastMessage<TestToastKind>("Persistent", kind: .failure, duration: nil)
+        toastStore.showToast(replacement)
+        toastStore.dismissToast(id: old.id)
         clock.finishFirst()
         await Task.yield()
-        #expect(context.toast?.id == replacement.id)
+        #expect(toastStore.toast?.id == replacement.id)
     }
 
     @Test func persistentDurationsNeverSchedule() async {
         let clock = ManualSleeper()
-        let context = PresentationContext(sleep: clock.sleep)
+        let toastStore = ToastStore<TestToastKind>(sleep: clock.sleep)
         for duration: TimeInterval? in [nil, 0, -1, .infinity, .nan] {
-            context.showToast(.init("Persistent", duration: duration))
+            toastStore.showToast(.init("Persistent", kind: .success, duration: duration))
             await Task.yield()
-            #expect(context.toast != nil)
+            #expect(toastStore.toast != nil)
         }
         #expect(clock.durations.isEmpty)
     }
 
-    @Test func pendingTimerDoesNotRetainContext() async {
+    @Test func pendingTimerDoesNotRetainStore() async {
         let clock = ManualSleeper()
-        var context: PresentationContext? = PresentationContext(sleep: clock.sleep)
-        let isReleased = { [weak context] in context == nil }
-        context?.showToast(.init("Temporary"))
+        var toastStore: ToastStore<TestToastKind>? = ToastStore(sleep: clock.sleep)
+        let isReleased = { [weak toastStore] in toastStore == nil }
+        toastStore?.showToast(.init("Temporary", kind: .success))
         while clock.pending.count < 1 { await Task.yield() }
-        context = nil
+        toastStore = nil
         #expect(isReleased())
         clock.finishFirst()
     }
@@ -186,7 +196,7 @@ struct PresentationContextTests {
         root.installedPresentationContext = context
         let nested = root
         #expect(root.presentationContext === nested.presentationContext)
-        nested.presentationContext.showToast(.init("Nested", duration: nil))
-        #expect(context.toast?.message == "Nested")
+        nested.presentationContext.showAlert(.init(title: "Nested"))
+        #expect(context.alert?.title == "Nested")
     }
 }
