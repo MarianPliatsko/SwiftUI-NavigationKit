@@ -88,7 +88,7 @@ struct MyApp: App {
 }
 ```
 
-`ToastMessage<Kind>` contains a message, the app-defined `kind`, and an optional duration in seconds. `Kind` must conform to `Sendable`; it need not be `Hashable` or `Equatable`. The renderer receives the same typed `ToastMessage<AppToastKind>`, so switching over `toast.kind` is exhaustive. The library does not impose Toast width or padding; set horizontal and bottom padding in your app-owned Toast view. `AlertRequest` remains independent and contains a title, optional message, and unrestricted array of actions (title, optional SwiftUI `ButtonRole`, main-actor handler). Toast kinds carry semantic meaning only; the library does not prescribe colors, fonts, assets, or view content.
+`ToastMessage<Kind>` contains a message, the app-defined `kind`, an optional duration in seconds, and a suggested `bottomPadding` in points (default `50`). `Kind` must conform to `Sendable`; it need not be `Hashable` or `Equatable`. The renderer receives the same typed `ToastMessage<AppToastKind>`, so switching over `toast.kind` is exhaustive. The library does not apply width or padding; the app-owned Toast view decides whether and how to use the suggested value. For example, `toastStore.showToast(.init("Saved", kind: .success, bottomPadding: 88))` can be paired with `.padding(.bottom, toast.bottomPadding)` in `CustomToastView`. `AlertRequest` remains independent and contains a title, optional message, and unrestricted array of actions (title, optional SwiftUI `ButtonRole`, main-actor handler). Toast kinds carry semantic meaning only; the library does not prescribe colors, fonts, assets, or view content.
 
 Both root builders must be supplied; return `EmptyView()` to intentionally omit a visual component. There is no default design. Builders receive the current request and may return any SwiftUI view. The alert view inherits the presentation context; the Toast view receives its typed `ToastStore<Kind>` in the environment.
 
@@ -154,7 +154,7 @@ struct CustomToastView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
-        .padding(.bottom, 88)
+        .padding(.bottom, toast.bottomPadding)
     }
 }
 ```
