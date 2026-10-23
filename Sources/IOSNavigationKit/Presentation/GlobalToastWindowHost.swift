@@ -121,6 +121,7 @@ private struct GlobalToastOverlay<Kind: Sendable>: View {
     @Bindable var toastStore: ToastStore<Kind>
     let toastContent: @MainActor (ToastMessage<Kind>) -> AnyView
     let onInteractiveFrameChange: @MainActor (CGRect) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -137,12 +138,23 @@ private struct GlobalToastOverlay<Kind: Sendable>: View {
                             )
                         }
                     }
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .move(edge: .bottom).combined(with: .opacity)
+                    )
                     .id(toast.id)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .coordinateSpace(name: "toast-window")
         .onPreferenceChange(ToastInteractiveFramePreferenceKey.self, perform: onInteractiveFrameChange)
+        .animation(
+            reduceMotion
+                ? .easeInOut(duration: 0.2)
+                : .spring(response: 0.42, dampingFraction: 0.88),
+            value: toastStore.toast?.id
+        )
     }
 }
 
